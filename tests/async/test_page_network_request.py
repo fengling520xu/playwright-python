@@ -22,7 +22,7 @@ from tests.server import Server
 
 async def test_should_not_allow_to_access_frame_on_popup_main_request(
     page: Page, server: Server
-):
+) -> None:
     await page.set_content(f'<a target=_blank href="{server.EMPTY_PAGE}">click me</a>')
     request_promise = asyncio.ensure_future(page.context.wait_for_event("request"))
     popup_promise = asyncio.ensure_future(page.context.wait_for_event("page"))
@@ -38,6 +38,26 @@ async def test_should_not_allow_to_access_frame_on_popup_main_request(
     )
 
     response = await request.response()
+    assert response
     await response.finished()
     await popup_promise
     await clicked
+
+
+async def test_should_parse_the_data_if_content_type_is_application_x_www_form_urlencoded_charset_UTF_8(
+    page: Page, server: Server
+) -> None:
+    await page.goto(server.EMPTY_PAGE)
+    async with page.expect_event("request") as request_info:
+        await page.evaluate(
+            """() => fetch('./post', {
+            method: 'POST',
+            headers: {
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            body: 'foo=bar&baz=123'
+        })"""
+        )
+    request = await request_info.value
+    assert request
+    assert request.post_data_json == {"foo": "bar", "baz": "123"}

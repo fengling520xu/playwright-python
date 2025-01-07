@@ -18,14 +18,16 @@ import os
 import re
 import zipfile
 from pathlib import Path
+from typing import Awaitable, Callable, cast
 
 import pytest
 
 from playwright.async_api import Browser, BrowserContext, Error, Page, Route, expect
-from tests.server import Server
+from tests.server import Server, TestServerRequest
+from tests.utils import must
 
 
-async def test_should_work(browser, server, tmpdir):
+async def test_should_work(browser: Browser, server: Server, tmpdir: Path) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(record_har_path=path)
     page = await context.new_page()
@@ -36,7 +38,9 @@ async def test_should_work(browser, server, tmpdir):
         assert "log" in data
 
 
-async def test_should_omit_content(browser, server, tmpdir):
+async def test_should_omit_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path,
@@ -54,7 +58,9 @@ async def test_should_omit_content(browser, server, tmpdir):
         assert "encoding" not in content1
 
 
-async def test_should_omit_content_legacy(browser, server, tmpdir):
+async def test_should_omit_content_legacy(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path, record_har_omit_content=True
@@ -71,7 +77,9 @@ async def test_should_omit_content_legacy(browser, server, tmpdir):
         assert "encoding" not in content1
 
 
-async def test_should_attach_content(browser, server, tmpdir, is_firefox):
+async def test_should_attach_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har.zip")
     context = await browser.new_context(
         record_har_path=path,
@@ -128,7 +136,9 @@ async def test_should_attach_content(browser, server, tmpdir, is_firefox):
                 assert len(f.read()) == entries[2]["response"]["content"]["size"]
 
 
-async def test_should_not_omit_content(browser, server, tmpdir):
+async def test_should_not_omit_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path, record_har_omit_content=False
@@ -142,7 +152,9 @@ async def test_should_not_omit_content(browser, server, tmpdir):
         assert "text" in content1
 
 
-async def test_should_include_content(browser, server, tmpdir):
+async def test_should_include_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(record_har_path=path)
     page = await context.new_page()
@@ -158,7 +170,9 @@ async def test_should_include_content(browser, server, tmpdir):
         assert "HAR Page" in content1["text"]
 
 
-async def test_should_default_to_full_mode(browser, server, tmpdir):
+async def test_should_default_to_full_mode(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path,
@@ -173,7 +187,9 @@ async def test_should_default_to_full_mode(browser, server, tmpdir):
         assert log["entries"][0]["request"]["bodySize"] >= 0
 
 
-async def test_should_support_minimal_mode(browser, server, tmpdir):
+async def test_should_support_minimal_mode(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path,
@@ -308,7 +324,7 @@ async def test_should_only_handle_requests_matching_url_filter(
     )
     page = await context.new_page()
 
-    async def handler(route: Route):
+    async def handler(route: Route) -> None:
         assert route.request.url == "http://no.playwright/"
         await route.fulfill(
             status=200,
@@ -330,7 +346,7 @@ async def test_should_only_handle_requests_matching_url_filter_no_fallback(
     await context.route_from_har(har=assetdir / "har-fulfill.har", url="**/*.js")
     page = await context.new_page()
 
-    async def handler(route: Route):
+    async def handler(route: Route) -> None:
         assert route.request.url == "http://no.playwright/"
         await route.fulfill(
             status=200,
@@ -351,7 +367,7 @@ async def test_should_only_handle_requests_matching_url_filter_no_fallback_page(
 ) -> None:
     await page.route_from_har(har=assetdir / "har-fulfill.har", url="**/*.js")
 
-    async def handler(route: Route):
+    async def handler(route: Route) -> None:
         assert route.request.url == "http://no.playwright/"
         await route.fulfill(
             status=200,
@@ -431,14 +447,12 @@ async def test_should_go_back_to_redirected_navigation(
     await expect(page).to_have_url(server.EMPTY_PAGE)
 
     response = await page.go_back()
+    assert response
     await expect(page).to_have_url("https://www.theverge.com/")
     assert response.request.url == "https://www.theverge.com/"
     assert await page.evaluate("window.location.href") == "https://www.theverge.com/"
 
 
-@pytest.mark.skip_browser(
-    "firefox"
-)  # skipped upstream (https://github.com/microsoft/playwright/blob/6a8d835145e2f4002ee00b67a80a1f70af956703/tests/library/browsercontext-har.spec.ts#L214)
 async def test_should_go_forward_to_redirected_navigation(
     context: BrowserContext, server: Server, assetdir: Path
 ) -> None:
@@ -454,6 +468,7 @@ async def test_should_go_forward_to_redirected_navigation(
     await page.go_back()
     await expect(page).to_have_url(server.EMPTY_PAGE)
     response = await page.go_forward()
+    assert response
     await expect(page).to_have_url("https://www.theverge.com/")
     assert response.request.url == "https://www.theverge.com/"
     assert await page.evaluate("window.location.href") == "https://www.theverge.com/"
@@ -469,6 +484,7 @@ async def test_should_reload_redirected_navigation(
     await page.goto("https://theverge.com/")
     await expect(page).to_have_url("https://www.theverge.com/")
     response = await page.reload()
+    assert response
     await expect(page).to_have_url("https://www.theverge.com/")
     assert response.request.url == "https://www.theverge.com/"
     assert await page.evaluate("window.location.href") == "https://www.theverge.com/"
@@ -541,7 +557,8 @@ async def test_should_disambiguate_by_header(
     browser: Browser, server: Server, tmpdir: Path
 ) -> None:
     server.set_route(
-        "/echo", lambda req: (req.write(req.getHeader("baz").encode()), req.finish())
+        "/echo",
+        lambda req: (req.write(cast(str, req.getHeader("baz")).encode()), req.finish()),
     )
     fetch_function = """
         async (bazValue) => {
@@ -628,6 +645,44 @@ async def test_should_update_har_zip_for_context(
     )
 
 
+async def test_page_unroute_all_should_stop_page_route_from_har(
+    context_factory: Callable[[], Awaitable[BrowserContext]],
+    server: Server,
+    assetdir: Path,
+) -> None:
+    har_path = assetdir / "har-fulfill.har"
+    context1 = await context_factory()
+    page1 = await context1.new_page()
+    # The har file contains requests for another domain, so the router
+    # is expected to abort all requests.
+    await page1.route_from_har(har_path, not_found="abort")
+    with pytest.raises(Error) as exc_info:
+        await page1.goto(server.EMPTY_PAGE)
+    assert exc_info.value
+    await page1.unroute_all(behavior="wait")
+    response = must(await page1.goto(server.EMPTY_PAGE))
+    assert response.ok
+
+
+async def test_context_unroute_call_should_stop_context_route_from_har(
+    context_factory: Callable[[], Awaitable[BrowserContext]],
+    server: Server,
+    assetdir: Path,
+) -> None:
+    har_path = assetdir / "har-fulfill.har"
+    context1 = await context_factory()
+    page1 = await context1.new_page()
+    # The har file contains requests for another domain, so the router
+    # is expected to abort all requests.
+    await context1.route_from_har(har_path, not_found="abort")
+    with pytest.raises(Error) as exc_info:
+        await page1.goto(server.EMPTY_PAGE)
+    assert exc_info.value
+    await context1.unroute_all(behavior="wait")
+    response = must(await page1.goto(server.EMPTY_PAGE))
+    assert must(response).ok
+
+
 async def test_should_update_har_zip_for_page(
     browser: Browser, server: Server, tmpdir: Path
 ) -> None:
@@ -697,3 +752,55 @@ async def test_should_update_extracted_har_zip_for_page(
     await expect(page_2.locator("body")).to_have_css(
         "background-color", "rgb(255, 192, 203)"
     )
+
+
+async def test_should_ignore_aborted_requests(
+    context_factory: Callable[[], Awaitable[BrowserContext]],
+    server: Server,
+    tmpdir: Path,
+) -> None:
+    path = tmpdir / "test.har"
+    server.set_route("/x", lambda request: request.loseConnection())
+    context1 = await context_factory()
+    await context1.route_from_har(har=path, update=True)
+    page1 = await context1.new_page()
+    await page1.goto(server.EMPTY_PAGE)
+    req_promise = asyncio.create_task(server.wait_for_request("/x"))
+    eval_task = asyncio.create_task(
+        page1.evaluate(
+            "url => fetch(url).catch(e => 'cancelled')", server.PREFIX + "/x"
+        )
+    )
+    await req_promise
+    req = await eval_task
+    assert req == "cancelled"
+    await context1.close()
+
+    server.reset()
+
+    def _handle_route(req: TestServerRequest) -> None:
+        req.setHeader("Content-Type", "text/plain")
+        req.write(b"test")
+        req.finish()
+
+    server.set_route("/x", _handle_route)
+    context2 = await context_factory()
+    await context2.route_from_har(path)
+    page2 = await context2.new_page()
+    await page2.goto(server.EMPTY_PAGE)
+    eval_task = asyncio.create_task(
+        page2.evaluate(
+            "url => fetch(url).catch(e => 'cancelled')", server.PREFIX + "/x"
+        )
+    )
+
+    async def _timeout() -> str:
+        await asyncio.sleep(1)
+        return "timeout"
+
+    done, _ = await asyncio.wait(
+        [eval_task, asyncio.create_task(_timeout())],
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    assert next(iter(done)).result() == "timeout"
+    eval_task.cancel()

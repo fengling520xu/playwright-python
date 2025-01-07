@@ -174,10 +174,9 @@ def test_should_amend_http_headers(
     context.route("**/*", handler_with_header_mods)
 
     page.goto(server.EMPTY_PAGE)
-    with page.expect_request("/sleep.zzz") as request_info:
+    with server.expect_request("/sleep.zzz") as server_request_info:
         page.evaluate("() => fetch('/sleep.zzz')")
-    request = request_info.value
-    values.append(request.headers.get("foo"))
+    values.append(server_request_info.value.getHeader("foo"))
     assert values == ["bar", "bar", "bar"]
 
 
@@ -204,7 +203,8 @@ def test_should_delete_header_with_undefined_value(
 
     def delete_foo_header(route: Route, request: Request) -> None:
         headers = request.all_headers()
-        route.fallback(headers={**headers, "foo": None})  # type: ignore
+        del headers["foo"]
+        route.fallback(headers=headers)
 
     context.route(server.PREFIX + "/something", delete_foo_header)
     with server.expect_request("/something") as server_req_info:

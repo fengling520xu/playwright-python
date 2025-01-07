@@ -11,12 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from pathlib import Path
+
 import pytest
 
-from playwright.async_api import Error, Page
+from playwright.async_api import Browser, Error, Page, Selectors
+
+from .utils import Utils
 
 
-async def test_selectors_register_should_work(selectors, browser, browser_name):
+async def test_selectors_register_should_work(
+    selectors: Selectors, browser: Browser, browser_name: str
+) -> None:
     tag_selector = """
         {
             create(root, target) {
@@ -74,8 +80,8 @@ async def test_selectors_register_should_work(selectors, browser, browser_name):
 
 
 async def test_selectors_register_should_work_with_path(
-    selectors, page: Page, utils, assetdir
-):
+    selectors: Selectors, page: Page, utils: Utils, assetdir: Path
+) -> None:
     await utils.register_selector_engine(
         selectors, "foo", path=assetdir / "sectionselectorengine.js"
     )
@@ -84,8 +90,8 @@ async def test_selectors_register_should_work_with_path(
 
 
 async def test_selectors_register_should_work_in_main_and_isolated_world(
-    selectors, page: Page, utils
-):
+    selectors: Selectors, page: Page, utils: Utils
+) -> None:
     dummy_selector_script = """{
       create(root, target) { },
       query(root, selector) {
@@ -150,7 +156,9 @@ async def test_selectors_register_should_work_in_main_and_isolated_world(
     )
 
 
-async def test_selectors_register_should_handle_errors(selectors, page: Page, utils):
+async def test_selectors_register_should_handle_errors(
+    selectors: Selectors, page: Page, utils: Utils
+) -> None:
     with pytest.raises(Error) as exc:
         await page.query_selector("neverregister=ignored")
     assert (
@@ -174,7 +182,7 @@ async def test_selectors_register_should_handle_errors(selectors, page: Page, ut
         await selectors.register("$", dummy_selector_engine_script)
     assert (
         exc.value.message
-        == "Selector engine name may only contain [a-zA-Z0-9_] characters"
+        == "Selectors.register: Selector engine name may only contain [a-zA-Z0-9_] characters"
     )
 
     # Selector names are case-sensitive.
@@ -187,11 +195,16 @@ async def test_selectors_register_should_handle_errors(selectors, page: Page, ut
 
     with pytest.raises(Error) as exc:
         await selectors.register("dummy", dummy_selector_engine_script)
-    assert exc.value.message == '"dummy" selector engine has been already registered'
+    assert (
+        exc.value.message
+        == 'Selectors.register: "dummy" selector engine has been already registered'
+    )
 
     with pytest.raises(Error) as exc:
         await selectors.register("css", dummy_selector_engine_script)
-    assert exc.value.message == '"css" is a predefined selector engine'
+    assert (
+        exc.value.message == 'Selectors.register: "css" is a predefined selector engine'
+    )
 
 
 async def test_should_work_with_layout_selectors(page: Page) -> None:

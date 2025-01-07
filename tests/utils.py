@@ -15,7 +15,7 @@
 import json
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 
 def parse_trace(path: Path) -> Tuple[Dict[str, bytes], List[Any]]:
@@ -55,3 +55,24 @@ def get_trace_actions(events: List[Any]) -> List[str]:
         key=lambda e: e["startTime"],
     )
     return [e["apiName"] for e in action_events]
+
+
+TARGET_CLOSED_ERROR_MESSAGE = "Target page, context or browser has been closed"
+
+MustType = TypeVar("MustType")
+
+
+def must(value: Optional[MustType]) -> MustType:
+    assert value
+    return value
+
+
+def chromium_version_less_than(a: str, b: str) -> bool:
+    left = list(map(int, a.split(".")))
+    right = list(map(int, b.split(".")))
+    for i in range(4):
+        if left[i] > right[i]:
+            return False
+        if left[i] < right[i]:
+            return True
+    return False
